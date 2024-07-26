@@ -14,6 +14,7 @@ import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.stream.Collectors;
+import java.util.stream.StreamSupport;
 
 @Service
 public class MeasurementProcessingService {
@@ -37,10 +38,12 @@ public class MeasurementProcessingService {
 		this.interpolateMissingData(measurements);
 
 		Iterable<MeasurementTimestamp> savedMeasurements = saveMeasurements(measurements.values());
-//		new ArrayList<>(savedMeasurements);
-//		return ;
 
-		return measurements; //TODO return newly added entries only
+		return StreamSupport.stream(savedMeasurements.spliterator(), false)
+				.collect(Collectors.toMap(MeasurementTimestamp::getDateTime,
+						measure -> measure,
+						(m1, m2) -> m2,
+						TreeMap::new));
 	}
 
 	private Map<OffsetDateTime, MeasurementTimestamp> transformMeasurements(List<RequestMeasurement> measurements) {

@@ -8,7 +8,9 @@ import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 @Service
 public class DataRetrievalService {
@@ -24,25 +26,33 @@ public class DataRetrievalService {
 
 		Map<OffsetDateTime, List<MeasurementTimestamp>> chronoGrouped = measurements.stream()
 				.collect(Collectors.groupingBy(m -> m.getDateTime().truncatedTo(granularity.chronoUnit)));
+		chronoGrouped = new TreeMap<>(chronoGrouped);
 
-		return new ChartData(measurements, calculateConsumptions(chronoGrouped), granularity);
+		return new ChartData(calculateMeasurements(chronoGrouped), calculateConsumptions(chronoGrouped), granularity);
 	}
 
-	private List<ConsumptionInterval> calculateConsumptions(Map<OffsetDateTime, List<MeasurementTimestamp>> measurements) {
-		return measurements.entrySet().stream()
-				.map(this::transformToConsumptionInterval)
+	private List<MeasurementTimestamp> calculateMeasurements(Map<OffsetDateTime, List<MeasurementTimestamp>> chronoGrouped) {
+		return chronoGrouped.values().stream()
+				.map(measurementTimestamps -> measurementTimestamps.get(0))
 				.toList();
 	}
 
-	private ConsumptionInterval transformToConsumptionInterval(Map.Entry<OffsetDateTime, List<MeasurementTimestamp>> measurements) {
-		List<MeasurementTimestamp> timestamps = measurements.getValue();
+	private List<ConsumptionInterval> calculateConsumptions(Map<OffsetDateTime, List<MeasurementTimestamp>> chronoGrouped) {
+		List<Map.Entry<OffsetDateTime, List<MeasurementTimestamp>>> entries = chronoGrouped.entrySet().stream().toList();
 
-		MeasurementTimestamp firstMeasurement = timestamps.get(0);
-		MeasurementTimestamp lastMeasurement = timestamps.get(timestamps.size()-1);
-		BigDecimal intervalConsumption = lastMeasurement.getConsumption().subtract(firstMeasurement.getConsumption());
+		return IntStream.range(0, entries.size() - 1)
+				.mapToObj(i -> {
+					MeasurementTimestamp firstTimestamp = entries.get(i).getValue().get(0);
+					MeasurementTimestamp lastTimestamp = entries.get(i + 1).getValue().get(0);
+					BigDecimal firstConsumption = firstTimestamp.getConsumption();
+					BigDecimal lastConsumption = lastTimestamp.getConsumption();
 
-		Interval interval = new Interval(firstMeasurement, lastMeasurement);
-		return new ConsumptionInterval(interval, intervalConsumption);
+					return new ConsumptionInterval(
+							new Interval(firstTimestamp, lastTimestamp),
+							lastConsumption.subtract(firstConsumption)
+					);
+				})
+				.toList();
 	}
 
 }
